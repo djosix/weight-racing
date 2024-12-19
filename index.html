@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <title>Plot</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #myDiv {
+            border: 1px solid #444;
+            margin-bottom: 20px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #444;
+            margin: 20px 0;
+        }
+
+        form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        form input[type="text"],
+        form input[type="password"],
+        form input[type="number"] {
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        form input[type="submit"] {
+            background: #007BFF;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        form input[type="submit"]:hover {
+            background: #0056b3;
+        }
+
+        select {
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        select:focus {
+            outline: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="myDiv"></div>
+    <form id="form" action="api.php" method="post">
+        <select id="rangeSelect">
+            <option value="last-day">Last Day</option>
+            <option value="last-4-days">Last 4 Days</option>
+            <option value="last-week" selected>Last Week</option>
+            <option value="last-2-weeks">Last 2 Weeks</option>
+            <option value="last-month">Last Month</option>
+            <option value="last-3-months">Last 3 Months</option>
+            <option value="last-6-months">Last 6 Months</option>
+            <option value="last-year">Last Year</option>
+            <option value="all-data">All Data</option>
+        </select>
+        <input type="text" name="name" placeholder="name" />
+        <input type="password" name="password" placeholder="password" />
+        <input type="number" name="value" placeholder="value" step="0.01" />
+        <input type="submit" value="Submit" />
+    </form>
+
+    <script>
+        const sleep = (milliseconds) => {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        };
+
+        const form = document.querySelector('#form');
+        const memorizedFields = ['name', 'password'];
+        const rangeSelect = document.getElementById('rangeSelect');
+        let plotData = [];
+        let allX = [];
+
+        // Restore saved fields
+        for (const name of memorizedFields) {
+            const val = localStorage.getItem(name);
+            if (val) form.querySelector(`[name=${name}]`).value = val;
+        }
+
+        // Save fields on submit
+        form.addEventListener('submit', e => {
+            for (const name of memorizedFields) {
+                localStorage.setItem(name, form.querySelector(`[name=${name}]`).value);
+            }
+            return true;
+        });
+
+        fetch('api.php').then(async response => {
+            let data = await response.json();
+            for (let [name, rows] of Object.entries(data)) {
+                let x = rows.map(row => row.date); 
+                let y = rows.map(row => row.value);
+                plotData.push({
+                    x, y, name,
+                    line: { shape: 'spline' },
+                    mode: 'lines+markers'
+                });
+                allX = allX.concat(x);
+            }
+
+            const dates = allX.map(d => new Date(d));
+            updateRange('last-week', dates);
+        });
+
+        rangeSelect.addEventListener('change', () => {
+            const dates = allX.map(d => new Date(d));
+            updateRange(rangeSelect.value, dates);
+        });
+
+        function updateRange(rangeType, dates) {
+            const maxDate = new Date(Math.max.apply(null, dates));
+            maxDate.setHours(maxDate.getHours() + 12);
+            const minDate = new Date(Math.min.apply(null, dates));
+
+            let startDate;
+            switch (rangeType) {
+                case 'last-day':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 1);
+                    break;
+                case 'last-4-days':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 4);
+                    break;
+                case 'last-week':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 7);
+                    break;
+                case 'last-2-weeks':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 14);
+                    break;
+                case 'last-month':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 30);
+                    break;
+                case 'last-3-months':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 90);
+                    break;
+                case 'last-6-months':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 180);
+                    break;
+                case 'last-year':
+                    startDate = new Date(maxDate);
+                    startDate.setDate(startDate.getDate() - 365);
+                    break;
+                case 'all-data':
+                    startDate = minDate;
+                    break;
+                default:
+                    startDate = minDate;
+            }
+
+            Plotly.newPlot('myDiv', plotData, {
+                paper_bgcolor: '#121212',
+                plot_bgcolor: '#121212',
+                font: { color: '#ffffff' },
+                xaxis: {
+                    range: [startDate, maxDate],
+                    fixedrange: true,
+                    showgrid: false,
+                    zeroline: false
+                },
+                yaxis: {
+                    showgrid: true,
+                    gridcolor: '#333',
+                    zeroline: false
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
